@@ -1,8 +1,8 @@
-FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.20 as build
+FROM --platform=${BUILDPLATFORM} golang:1.20 as build
 
 WORKDIR /build
 
-ARG BUILDPLATFORM TARGETARCH TARGETPLATFORM
+ARG BUILDPLATFORM TARGETARCH TARGETOS
 
 COPY go.mod ./
 COPY go.sum ./
@@ -16,15 +16,17 @@ ONBUILD RUN script/install-libtensorflow
 
 FROM build${TARGETARCH} as build
 
-RUN go build -a -o 'snips.sh'
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -o 'snips.sh'
 
-FROM ubuntu:20.04
+FROM --platform=${BUILDPLATFORM} ubuntu:20.04 as finalamd64
+ONBUILD COPY --from=build /usr/local/lib/libtensorflow.so.2 /usr/local/lib/
+ONBUILD COPY --from=build /usr/local/lib/libtensorflow_framework.so.2 /usr/local/lib/
+
+ONBUILD RUN ldconfig
+
+FROM final${TARGETARCH}
 
 COPY --from=build /build/snips.sh /usr/bin/snips.sh
-COPY --from=build /usr/local/lib/libtensorflow.so.2 /usr/local/lib/
-COPY --from=build /usr/local/lib/libtensorflow_framework.so.2 /usr/local/lib/
-
-RUN ldconfig
 
 ENV SNIPS_HTTP_INTERNAL=http://0.0.0.0:8080
 ENV SNIPS_SSH_INTERNAL=ssh://0.0.0.0:2222
