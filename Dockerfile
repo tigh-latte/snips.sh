@@ -1,6 +1,8 @@
-FROM golang:1.20 as build
+FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.20 as build
 
 WORKDIR /build
+
+ARG BUILDPLATFORM TARGETARCH TARGETPLATFORM
 
 COPY go.mod ./
 COPY go.sum ./
@@ -9,7 +11,10 @@ RUN go mod verify
 
 COPY . .
 
-RUN script/install-libtensorflow
+FROM build as buildamd64
+ONBUILD RUN script/install-libtensorflow
+
+FROM build${TARGETARCH} as build
 
 RUN go build -a -o 'snips.sh'
 
